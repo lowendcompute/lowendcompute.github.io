@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Low End Compute</title>
+<style>
+html { color: #000; background-color: #6fbf0d; }
+body { max-width: 600px; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }
+pre, code { font-family: monospace, monospace; }
+img { display: block; margin: 0 auto; max-width: 100%; height: auto;}
+</style>
+</head>
+<body>
+<h1>Low End Compute</h1>
+<h2>The economics of ultra-cheap servers</h2>
+<p>Due to IPv4 exhaustion, an IPv4 address has become a major part of the cost of a VPS.</p>
+<p>VPS providers have found two ways to reduce the cost of servers:</p>
+<ul>
+<li>IPv6-only VPS</li>
+<li>IPv6 VPS with 20 IPv4 ports allocated to you ("NAT IPv4" VPS)</li>
+</ul>
+<h2>Check your IPv6 connectivity</h2>
+<p>Before you do any more investigation of ultra-cheap servers, check your IPv6 connectivity. Both the device you are using and the network you are on must fully support IPv6.</p>
+<p>Android devices can be inconsistent in this respect. I have seen situations where two Android devices were both on the same network, yet one had IPv6 connectivity, the other didn't.</p> 
+<p>Connect your device to your network, and open a browser.</p>
+<p>Visit <a href="https://ipv6test.google.com">https://ipv6test.google.com</a>.</p>
+<p>Ideally you will see a message that says <code>Yes, looks like you're using IPv6 already</code>.</p>
+<p>Beware of a message that says <code>No problems detected</code>, but then qualifies it by saying <code>You don't have IPv6, but you shouldn't have problems on websites that add IPv6 support</code>.</p>
+<p>Double-check and triple-check your IPv6 connectivity. Make sure <em>both</em> of these sites show that your device has an IPv6 address:</p>
+<ul>
+<li><a href="https://whatismyipaddress.com">https://whatismyipaddress.com</a></li>
+<li><a href="https://www.whatismyip.com">https://www.whatismyip.com</a></li>
+</ul>
+<h2>Choose a low end provider</h2>
+<p>There are two sites where you can see reviews of low end VPS providers and ask questions:</p>
+<ul>
+<li><a href="https://lowendspirit.com">https://lowendspirit.com</a></li>
+<li><a href="https://lowendtalk.com">https://lowendtalk.com</a></li>
+</ul>
+<p>Note that ultra-cheap VPS providers are obviously very popular. If they become too well known, then a restrictive firewall may completely block access to their IP addresses. Make sure your VPS provider's IP addresses are reachable from your network.</p>
+<h2>Use cases for low end servers</h2>
+<p>Typical use cases for ultra-cheap servers are:</p>
+<ul>
+<li>Personal web site or blog</li>
+<li>Personal proxy or VPN (but note possible firewall restrictions, as mentioned above)</li>
+</ul>
+<h2>Domain name or no domain name?</h2>
+<p>If you want to keep your costs as low as possible, then the cost of a domain name becomes a consideration.</p>
+<p>Freenom no longer offers free domain names. <code>eu.org</code> has long delays, and you may not get a domain name at all. "Free" domain names bundled with hosting packages are not really free at all.</p>
+<p>Therefore, if you want a domain name, you will have to look into paid domain names.</p>
+<p>Some domain names are cheap for the first year only, and become expensive to renew. Examples right now are <code>.buzz</code>, <code>.click</code>, <code>.space</code>, <code>.website</code>, and sometimes <code>.xyz</code>. They are only suitable if you want a domain name for just one year.</p>
+<p>The most affordable domain names for long-term use are often country-code top level domains. For example, <code>.de</code>, <code>.nl</code>, <code>.eu</code>, <code>.ca</code>, <code>.us</code>, and <code>.uk</code> are reasonably priced. However, there may be residency requirements for country-code top level domains.</p>
+<p>One possibility is to have no domain name at all. This works for certain kinds of personal VPNs or proxy servers. For web sites it looks a bit odd, as you have you give your users the numeric IP address of the server instead of a domain name. This is possible but awkward. Also, you cannot get an SSL certificate for a domain name, and therefore you cannot offer your users HTTPS.</p>
+<h2>CDN or no CDN?</h2>
+<p>If you have a domain name, you can decide whether or not to proxy it through a CDN such as Cloudflare.</p>
+<p>For a web site, this has the advantage that you can enable IPv4 access to your domain name through Cloudflare, even if your server itself is reachable only on IPv6.</p>
+<p>Against that, Cloudflare is cracking down on people hiding proxy servers behind their CDN service.</p>
+<h2>IPv6-only or NAT IPv4 VPS?</h2>
+<p>From the point of view of IPv6 capabilities, IPv6-only and NAT IPv4 are similar.</p>
+<p>However, there are differences when it comes to IPv4 capabilities.</p>
+<p>IPv6-only may work for you, depending on your use case, your device, and your network. Even though you have only IPv6 connectivity, you can use Cloudflare proxying to make your web site available to visitors with IPv4 only.</p>
+<p>NAT IPv4 offers additional IPv4 possibilities, even though IPv4 ports <code>80</code> and <code>443</code> are not among the 20 ports allocated to you:</p>
+<ul>
+<li>OpenVPN can use any IPv4 port you choose</li>
+<li>WireGuard can use any IPv4 port you choose</li>
+<li>Shadowsocks 2022 can use any IPv4 port you choose</li>
+<li>VMess + TCP can use any IPv4 port you choose</li>
+<li>As a last resort for a web site, you can give your users an IPv4-only address without a domain name and with a non-standard port (e.g. "Visit my website at <code>http://12.34.56.78:9012</code>")</li>
+</ul>
+</body>
+</html>
