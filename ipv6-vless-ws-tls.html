@@ -70,7 +70,7 @@ server {
 <p>Insert a location block into the <code>nginx</code> server block listening on port <code>[::]:443</code> in <code>/etc/nginx/sites-available/default</code>:</p>
 <pre>
   location /764gvpfd {
-       	  if ($http_upgrade != "websocket") {
+    if ($http_upgrade != "websocket") {
       return 404;
     }
     proxy_pass http://[::1]:1234;
@@ -161,7 +161,7 @@ server {
 
 <h2>Install and configure client</h2>
 <p>For a Windows client, visit <a href="https://github.com/2dust/v2rayN/releases">https://github.com/2dust/v2rayN/releases</a>. Download, unzip, and configure <code>v2rayN-windows-64-SelfContained.zip</code>.</p>
-<p>For an Android client, use <a href="https://github.com/2dust/v2rayN/releases">https://github.com/2dust/v2rayN/releases</a>.</p>
+<p>For an Android client, use <a href="https://github.com/2dust/v2rayNG/releases">https://github.com/2dust/v2rayNG/releases</a>.</p>
 <p>For other client platforms, see the <strong>GUI Clients</strong> list at <a href="https://github.com/XTLS/Xray-core?tab=readme-ov-file#gui-clients">https://github.com/XTLS/Xray-core?tab=readme-ov-file#gui-clients</a>.</p>
 
 </body>
