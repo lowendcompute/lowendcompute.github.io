@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>VLESS + WS + TLS for IPv6 server</title>
+<style>
+html { color: #000; background-color: #6fbf0d; }
+body { max-width: 600px; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }
+pre, code { font-family: monospace, monospace; }
+img { display: block; margin: 0 auto; max-width: 100%; height: auto;}
+</style>
+</head>
+<body>
+<h1>VLESS + WS + TLS for IPv6 server</h1>
+<p>This configuration is designed for an ultra-cheap VPS where you have only IPv6 access to the server. The situation of an IPv6 server has been simulated by testing this procedure on a dual-stack machine.</p>
+<p>VLESS + WS + TLS will look like an HTTPS connection on port <code>tcp/443</code>. This will pass through simple firewalls, though not through sophisticated deep packet inspection (DPI).</p>
+
+<h2>Prerequisites</h2>
+<p>As described on the <a href="index.html">index page</a>, fully test your IPv6 connectivity before you begin.</p>
+<p>If your IPv6 connectivity is good, acquire a server with IPv6 access. </p>
+<p>You also need a domain name. Choose a subdomain name within your domain. Create a DNS <code>AAAA</code> entry pointing from your subdomain name to the IPv6 address of your server.</p>
+
+<h2>Open firewall</h2>
+<p>Open ports <code>tcp/80</code> and <code>tcp/443</code> for IPv6 input.</p>
+<p>Take the steps required to persist your firewall rules across reboots.</p>
+
+<h2>Install nginx</h2>
+<p>Update your server and install the <code>nginx</code> web server:</p>
+<p><code>apt update && apt upgrade -y && apt autoremove -y</code></p>
+<p><code>apt install -y nginx</code></p>
+
+<h2>Preliminary nginx configuration</h2>
+<p>Edit the default virtual host configuration file, <code>/etc/nginx/sites-available/default</code>.</p>
+<p>Make the server listen on IPv6 only. Also insert your server hostname (i.e. your chosen subdomain name).</p>
+<pre>
+server {
+  listen [::]:80 default_server;
+
+  root /var/www/html;
+
+  index index.html index.htm index.nginx-debian.html;
+
+  server_name your.subdomain.name;
+
+  location / {
+    try_files $uri $uri/ =404;
+  }
+
+}
+</pre>
+<p>Save the file. Then restart <code>nginx</code>:</p>
+<p><code>systemctl restart nginx</code></p>
+
+<h2>Obtain SSL certificate for nginx</h2>
+<p>Install the Let's Encrypt client, <code>certbot</code>, as a <code>snap</code>:</p>
+<p><code>apt install -y snapd</code></p>
+<p><code>snap install certbot --classic</code></p>
+<p><code>ln -s /snap/bin/certbot /usr/bin/certbot</code></p>
+<p>Obtain an SSL certificate for your server hostname (i.e. your chosen subdomain name):</p>
+<p><code>certbot --nginx --agree-tos --register-unsafely-without-email -d your.subdomain.name</code></p>
+<p><code>certbot renew --dry-run</code></p>
+
+<h2>Generate secret path for xray</h2>
+<p>Generate a secret path to pass through <code>nginx</code> to <code>xray</code>, which is "behind" <code>nginx</code>, listening on localhost port <code>tcp/1234</code>:</p>
+<p><code>&lt; /dev/urandom tr -dc a-z-0-9 | head -c${1:-8};echo;</code></p>
+<p>Example result of the above command:</p>
+<p><code>764gvpfd</code></p>
+<p>Edit the default virtual host configuration file, <code>/etc/nginx/sites-available/default</code>.</p>
+<p>Insert a location block into the <code>nginx</code> server block listening on port <code>[::]:443</code> in <code>/etc/nginx/sites-available/default</code>:</p>
+<pre>
+  location /764gvpfd {
+       	  if ($http_upgrade != "websocket") {
+      return 404;
+    }
+    proxy_pass http://[::1]:1234;
+    proxy_redirect off;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+</pre>
+<p>Save the file. Restart the <code>nginx</code> web server:</p>
+<p><code>systemctl restart nginx</code></p>
+
+<h2>Install xray</h2>
+<p>Install <code>xray</code> with the official installer script:</p>
+<p><code>bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install</code></p>
+
+<h2>Configure xray</h2>
+<p>Generate a universally unique identifier (UUID):</p>
+<p><code>xray uuid</code></p>
+<p>Example result of the above command:</p>
+<p><code>0a27301a-3b3e-4839-89d8-01d179cb8246</code></p>
+<p>Edit the <code>xray</code> configuration file, <code>/usr/local/etc/xray/config.json</code>. Use this as your model:</p>
+<pre>
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "listen": "::1",
+      "port": 1234 ,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "0a27301a-3b3e-4839-89d8-01d179cb8246"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/764gvpfd"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {}
+    },
+    {
+      "tag": "blocked",
+      "protocol": "blackhole",
+      "settings": {}
+    }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "ip": [
+          "geoip:cn",
+          "geoip:private"
+        ],
+        "outboundTag": "blocked"
+      }
+    ]
+  }
+}
+</pre>
+<p>Save the file. Restart <code>xray</code>:</p>
+<p><code>systemctl restart xray</code></p>
+
+<h2>Install and configure client</h2>
+<p>For a Windows client, visit <a href="https://github.com/2dust/v2rayN/releases">https://github.com/2dust/v2rayN/releases</a>. Download, unzip, and configure <code>v2rayN-windows-64-SelfContained.zip</code>.</p>
+<p>For an Android client, use <a href="https://github.com/2dust/v2rayN/releases">https://github.com/2dust/v2rayN/releases</a>.</p>
+<p>For other client platforms, see the <strong>GUI Clients</strong> list at <a href="https://github.com/XTLS/Xray-core?tab=readme-ov-file#gui-clients">https://github.com/XTLS/Xray-core?tab=readme-ov-file#gui-clients</a>.</p>
+
+</body>
+</html>
