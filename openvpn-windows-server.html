@@ -41,23 +41,67 @@ img { display: block; margin: 0 auto; max-width: 100%; height: auto;}
 </pre>
 
 <p>5. Create a Certificate Authority (CA) using <code>easyrsa</code>.</p>
-    <pre>
+<pre>
     ./easyrsa build-ca nopass
-    </pre>
+</pre>
 
 <p>6. Build a server key and certificate for server "moon" using <code>easyrsa</code>.</p>
-    <pre>
+<pre>
     ./easyrsa build-server-full moon nopass
-    </pre>
+</pre>
 
 <p>7. Build a client key and certificate for client "carol" using <code>easyrsa</code>.</p>
-    <pre>
+<pre>
     ./easyrsa build-client-full carol nopass
-    </pre>
+</pre>
 
 <p>8. Create Diffie-Hellman parameters using <code>easyrsa</code>.</p>
+<pre>
+    ./easyrsa gen-dh
+</pre>
 
 <p>9. Create TLS Crypt v2 keys using the <code>easytls</code> script.</p>
+
+<pre>
+    ./easytls init-tls
+</pre>
+
+<p>You may get a message, <code>Error: Unsupported OpenSSL version: 3.4<code>. In this case, do:</p>
+
+<pre>
+    notepad easytls
+</pre>
+
+<p>Find the block:</p>
+<pre>
+	case "${openssl_version}" in
+		3.0|3.1) : ;;
+		1.1) : ;;
+		*) die "Unsupported OpenSSL version: ${openssl_version}" ;;
+	esac
+</pre>
+
+<p>Add the case of OpenSSL later versions:</p>
+<pre>
+	case "${openssl_version}" in
+		3.0|3.1|3.2|3.3|3.4) : ;;
+		1.1) : ;;
+		*) die "Unsupported OpenSSL version: ${openssl_version}" ;;
+	esac
+</pre>
+
+<p>Save the file, and close Notepad. Then re-run the command:</p>
+<pre>
+    ./easytls init-tls
+
+    ./easytls build-tls-crypt-v2-server moon
+
+    ./easytls build-tls-crypt-v2-client moon carol
+
+    ./easytls inline-tls-crypt-v2 carol
+</pre>
+
+<p>The inline TLS crypt v2 file is created at <code>C:/Program Files/OpenVPN/easy-rsa/pki/easytls/carol.inline</code>. The inline file is for eventual incorporation into your client configuration <code>.ovpn</code> file.</p>
 
 <p>10. Create the server configuration for server "moon", for example:</p>
 <pre>
