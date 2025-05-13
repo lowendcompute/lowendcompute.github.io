@@ -148,9 +148,22 @@ img { display: block; margin: 0 auto; max-width: 100%; height: auto;}
 
 <p>12. Enable forwarding on your OpenVPN TAP-Windows6 interface using the <code>netsh</code> command in an elevated command prompt.</p>
 
+<pre>
+    netsh int ipv4 show int
+</pre>
+	
+<p>Replace <code>xx</code> by your OpenVPN TAP-Windows6 interface number in these commands:</p>
+<pre>
+    netsh int ipv4 show int xx | findstr "Forwarding"
+
+    netsh int ipv4 set int xx Forwarding="enabled"
+
+    netsh int ipv4 show int xx | findstr "Forwarding"
+</pre>
+	
 <p>13. Enable routing using the Registry Editor to set <code>HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\IPEnableRouter</code> to value <code>1</code>.</p>
 
-<p>14. Start the service Routing and Remote Access and set it to automatic start, stop OpenVPN Interactive Service and set it to manual start, and restart OpenVPNService.</p>
+<p>14. Start the service Routing and Remote Access and set it to automatic start; stop OpenVPN Interactive Service and set it to manual start; and restart OpenVPNService.</p>
 
 <p>15. Allow Internet Connection Sharing. On your computer's main interface's Sharing tab, check the box to <code>Allow other network users to connect through this computer's Internet connection</code>, and specifically allow the OpenVPN TAP-Windows6 to share it.</p>
 
