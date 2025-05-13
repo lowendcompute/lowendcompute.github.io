@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8"> 
+<title>OpenVPN Windows Server</title>
+<style>
+html { color: #000; background-color: #6fbf0d; }
+body { max-width: 600px; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }
+pre, code { font-family: monospace, monospace; }
+img { display: block; margin: 0 auto; max-width: 100%; height: auto;}
+</style>
+</head>
+<body>
+<h1>OpenVPN Windows Server</h1>
+
+<p>If you want to configure a Windows computer to act as a VPN server, using the free community edition of OpenVPN, then you must carry out 17 steps.</p>
+
+<p>You can watch a demonstration of the 17 steps in a YouTube video:</p>
+
+<p><a href="https://www.youtube.com/watch?v=K4kAR3M0XHU" https://github.com/TinCanTech/easy-tls/releases>https://www.youtube.com/watch?v=K4kAR3M0XHU</a></p>
+
+<p>1. Open port <code>udp/1194</code> by creating a new input rule in Windows Defender Firewall with Advanced Security.</p>
+
+<p>2. Install OpenVPN and EasyRSA from <a href="https://openvpn.net/community-downloads" https://github.com/TinCanTech/easy-tls/releases>https://openvpn.net/community-downloads</a>.</p>
+
+<p>3. Install EasyTLS from <a href="https://github.com/TinCanTech/easy-tls/releases" target="_blank">https://github.com/TinCanTech/easy-tls/releases<a>.</p>
+
+<p>4. Initialize Public Key Infrastructure using the <code>EasyRSA-Start</code> batch file and the <code>easyrsa</code> script.</p>
+
+<p>5. Create a Certificate Authority (CA) using <code>easyrsa</code>.</p>
+
+<p>6. Build a server key and certificate for server "moon" using <code>easyrsa</code>.</p>
+
+<p>7. Build a client key and certificate for client "carol" using <code>easyrsa</code>.</p>
+
+<p>8. Create Diffie-Hellman parameters using <code>easyrsa</code>.</p>
+
+<p>9. Create TLS Crypt v2 keys using the <code>easytls</code> script.</p>
+
+<p>10. Create the server configuration for server "moon", for example:</p>
+<pre>
+    port 1194
+    proto udp
+    dev tun
+    topology subnet
+    cipher AES-256-GCM
+    ca "C:\\Program Files\\OpenVPN\\easy-rsa\\pki\\ca.crt"
+    cert "C:\\Program Files\\OpenVPN\\easy-rsa\\pki\\issued\\moon.crt"
+    key "C:\\Program Files\\OpenVPN\\easy-rsa\\pki\\private\\moon.key"
+    dh "C:\\Program Files\\OpenVPN\\easy-rsa\\pki\\dh.pem"
+    tls-crypt-v2 "C:\\Program Files\\OpenVPN\\easy-rsa\\pki\\easytls\\moon-tls-crypt-v2.key"
+    server 10.8.0.0 255.255.255.0
+    ifconfig-pool-persist ipp.txt
+    push "redirect-gateway def1"
+    push "dhcp-option DNS 1.1.1.1"
+    push "dhcp-option DNS 1.0.0.1"
+    push "block-outside-dns"
+    keepalive 10 60
+    persist-key
+    persist-tun
+    explicit-exit-notify 1
+    verb 3
+</pre>
+
+<p>11. Create the client configuration for "carol", incorporating the inline file created by the easytls script, e.g.:</p>
+<pre>
+    client
+    dev tun
+    proto udp
+    cipher AES-256-GCM
+    remote 123.123.123.123 1194
+    resolv-retry infinite
+    nobind
+    persist-key
+    persist-tun
+
+    (Incorporate C:/Program Files/OpenVPN/easy-rsa/pki/easytls/carol.inline here)
+
+    remote-cert-tls server
+    verb 3
+</pre>
+
+<p>12. Enable forwarding on your OpenVPN TAP-Windows6 interface using the <code>netsh</code> command in an elevated command prompt.</p>
+
+<p>13. Enable routing using the Registry Editor to set <code>HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\IPEnableRouter</code> to value <code>1</code>.</p>
+
+<p>14. Start the service Routing and Remote Access and set it to automatic start, stop OpenVPN Interactive Service and set it to manual start, and restart OpenVPNService.</p>
+
+<p>15. Allow Internet Connection Sharing. On your computer's main interface's Sharing tab, check the box to <code>Allow other network users to connect through this computer's Internet connection</code>, and specifically allow the OpenVPN TAP-Windows6 to share it.</p>
+
+<p>16. Disable and re-enable the OpenVPN TAP-Windows6 interface.</p>
+
+<p>17. Check that your computer is listening on port <code>udp/1194</code>, and check the log for confirmation and the OpenVPN initialization sequences has completed.</p>
+
+<p>If you experience any problems, try rebooting your computer.</p>
+
+<p>The Windows computer in the video is located in a data center. In a home network, you would need to open your router firewall, port forward OpenVPN traffic from your router to your PC, and configure the PC power plan so that your PC does not sleep or hibernate. Using a home PC will work only if your ISP gives your home a unique IP address (i.e. no Carrier Grade NAT).</p>
+
+<p>If your computer operating system is Windows Server, remember that <code>IE Enhanced Security Configuration</code> must be set to off to use the browser.</p>
+
+</body>
+</html>
