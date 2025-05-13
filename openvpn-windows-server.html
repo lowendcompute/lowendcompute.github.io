@@ -24,15 +24,36 @@ img { display: block; margin: 0 auto; max-width: 100%; height: auto;}
 
 <p>2. Install OpenVPN and EasyRSA from <a href="https://openvpn.net/community-downloads" target="_blank">https://openvpn.net/community-downloads</a>.</p>
 
-<p>3. Install EasyTLS from <a href="https://github.com/TinCanTech/easy-tls/releases" target="_blank">https://github.com/TinCanTech/easy-tls/releases<a>.</p>
+<p>3. Install EasyTLS from <a href="https://github.com/TinCanTech/easy-tls/releases" target="_blank">https://github.com/TinCanTech/easy-tls/releases<a>. Copy the 8 extracted files into the same folder as <code>easyrsa</code>.</p>
 
 <p>4. Initialize Public Key Infrastructure using the <code>EasyRSA-Start</code> batch file and the <code>easyrsa</code> script.</p>
+    
+<pre>
+    cd C:\Program Files\OpenVPN\easy-rsa
+
+    copy vars.example vars
+
+    notepad vars
+
+    EasyRSA-Start.bat
+
+    ./easyrsa init-pki
+</pre>
 
 <p>5. Create a Certificate Authority (CA) using <code>easyrsa</code>.</p>
+    <pre>
+    ./easyrsa build-ca nopass
+    </pre>
 
 <p>6. Build a server key and certificate for server "moon" using <code>easyrsa</code>.</p>
+    <pre>
+    ./easyrsa build-server-full moon nopass
+    </pre>
 
 <p>7. Build a client key and certificate for client "carol" using <code>easyrsa</code>.</p>
+    <pre>
+    ./easyrsa build-client-full carol nopass
+    </pre>
 
 <p>8. Create Diffie-Hellman parameters using <code>easyrsa</code>.</p>
 
