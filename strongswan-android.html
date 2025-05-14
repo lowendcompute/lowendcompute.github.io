@@ -90,17 +90,22 @@ pools {
 <p><code>exit</code></p>
 
 <h2>Client</h2>
-<p>1. Securely copy the legacy-encrypted <code>.p12</code> file from your server to your Android device. Either transfer from server to PC then from PC to Android, or use Termius on the Android device.</p>
+<h3>1. Securely copy the legacy-encrypted <code>.p12</code> file from your server to your Android device</h3>
+    <p>Either transfer from server to PC then from PC to Android, or use Termius on the Android device.</p>
 
-<p>2. Import p12 file to Android client. This varies a bit from version of Android to version of Android. On Android 13 the option to import a user certificate is under 
+<h3>2. Import p12 file to Android client</h3>
+     <p>This varies a bit from version of Android to version of Android. On Android 13 the option to import a user certificate is under 
 <strong>Settings</strong> &gt; <strong>Unlock and security</strong> &gt; <strong>More security settings</strong> &gt; <strong>Encryption and credentials</strong> &gt; <strong>Install a certificate</strong> &gt; <strong>VPN &amp; app user certificate</strong>.</p>
 
-<p>3. Install and configure strongSwan on Android client. From the Google Play store, install <strong>strongSwan VPN Client</strong> by <strong>strongSwan Project</strong>.
+<h3>3. Install and configure strongSwan on Android client</h3>
+     <p>From the Google Play store, install <strong>strongSwan VPN Client</strong> by <strong>strongSwan Project</strong>.</p>
 
-<p>4. Add a VPN profile with IKEv2 certificate authentication. Select your imported <code>.p12</code> user certificate. If desired, select advanced settings (e.g. to block traffic that is not going to the VPN).
+<h3>4. Add a VPN profile with IKEv2 certificate authentication</h3>
+     <p>Select your imported <code>.p12</code> user certificate. If desired, select advanced settings (e.g. to block traffic that is not going to the VPN).
 Save your new VPN profile.</p>
 
-<p>5. Connect. On the screen with your VPN profile(s) on it, tap your desired row to connect the client to the server.</p>
+<h3>5. Connect.</h3>
+    <p>On the screen with your VPN profile(s) on it, tap your desired row to connect the client to the server.</p>
 
 </body>
 </html>
