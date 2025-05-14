@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"> 
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configure strongSwan server for Android clients</title>
+<style>
+html { color: #000; background-color: #2bb2dc; }
+body { max-width: 600px; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }
+pre, code { font-family: monospace, monospace; }
+img { display: block; margin: 0 auto; max-width: 100%; height: auto;}
+</style>
+</head>
+<body>
+<h1>Configure strongSwan server for Android clients</h1>
+
+<h2>Server</h2>
+
+<h3>1. Allow forwarding in the Linux kernel</h3>
+<p>Edit <code>/etc/sysctl.conf</code>.</p>
+<p>Uncomment the line:</p>
+<p><code>net.ipv4.ip_forward=1</code></p>
+<p>Save the file and activate the change:</p>
+<p><code>sysctl -p</code></p>
+
+<h3>2. Add iptables rules</h3>
+<p>Open iptables for IPsec input:</p>
+<p><code>iptables -A INPUT -p udp --dport 500 -j ACCEPT</code></p>
+<p><code>iptables -A INPUT -p udp --dport 4500 -j ACCEPT</code></p>
+<p>Assuming your main interface is named <code>ens3</code>, masquerade the IP address of the output packets:</p>
+<p><code>iptables -t nat -A POSTROUTING -s 10.3.0.0/16 -o ens3 -j MASQUERADE</code></p>
+<p>Assuming you have previously installed and configured <code>iptables-persistent</code>, persist the revised set of rules as they now stand:</p>
+<p><code>dpkg-reconfigure iptables-persistent</code></p>
+
+<h3>3. Install strongSwan on server</h3>
+<p>Install strongSwan:</p>
+<p><code>apt update &amp;&amp; apt upgrade -y &amp;&amp; apt autoremove -y</code></p>
+<p><code>apt install -y strongswan strongswan-swanctl strongswan-pki libstrongswan libstrongswan-standard-plugins libstrongswan-extra-plugins libcharon-extra-plugins libcharon-extauth-plugins charon-systemd libtss2-tcti-tabrmd0</code></p>
+
+<h3>4. Create keys and certificates</h3>
+<p>Make a directory for certificate requests:</p>
+<p><code>mkdir /etc/swanctl/req</code></p>
+<p>Make a self-signed CA certificate. Note that Android does not accept key types such as <code>ed25519</code>. For maximum cross-platform compatibility, use key type <code>rsa</code>:</p>
+<p><code>pki --gen --type rsa --size 3072 --outform pem &gt; /etc/swanctl/private/strongswanKey.pem</code></p>
+<p><code>pki --self --ca --lifetime 3652 --in /etc/swanctl/private/strongswanKey.pem --dn "C=CH, O=strongSwan, CN=strongSwan Root CA" --outform pem > /etc/swanctl/x509ca/strongswanCert.pem</code></p>
+<p>Generate a server certificate identified by IP address. Change <code>123.45.67.89</code> to your actual server IP address. Make other changes to the certificate country and organization as desired:</p>
+<p><code>pki --gen --type rsa --size 3072 --outform pem &gt; /etc/swanctl/private/123.45.67.89.pem</code></p>
+<p><code>pki --req --type priv --in /etc/swanctl/private/123.45.67.89.pem --dn "C=CH, O=strongswan, CN=123.45.67.89" --san 123.45.67.89 --outform pem > /etc/swanctl/req/123.45.67.89.pem</code></p>
+<p><code>pki --issue --cacert /etc/swanctl/x509ca/strongswanCert.pem --cakey /etc/swanctl/private/strongswanKey.pem --type pkcs10 --in /etc/swanctl/req/123.45.67.89.pem --flag serverAuth --flag ikeIntermediate --lifetime 1826 --outform pem > /etc/swanctl/x509/123.45.67.89.pem</code></p>
+<p>Generate a client certificate identified by your client's name. Change <code>alice</code> to your desired name:</p>
+<p><code>pki --gen --type rsa --size 3072 --outform pem &gt; /etc/swanctl/private/aliceKey.pem</code></p>
+<p><code>pki --req --type priv --in /etc/swanctl/private/aliceKey.pem --dn "C=CH, O=strongswan, CN=alice" --san alice --outform pem > /etc/swanctl/req/aliceReq.pem</code></p>
+<p><code>pki --issue --cacert /etc/swanctl/x509ca/strongswanCert.pem --cakey /etc/swanctl/private/strongswanKey.pem --type pkcs10 --in /etc/swanctl/req/aliceReq.pem --flag clientAuth --lifetime 1826 --outform pem > /etc/swanctl/x509/aliceCert.pem</code></p>
+<p>For Android, you must export your <code>.p12</code> file with the option for legacy encryption, as Android cannot handle newer encryption:</p>
+<p><code>openssl pkcs12 -export -legacy -inkey /etc/swanctl/private/aliceKey.pem -in /etc/swanctl/x509/aliceCert.pem -certfile /etc/swanctl/x509ca/strongswanCert.pem -out ~/alice-legacy.p12</code></p>
+
+<h3>5. Create strongSwan configuration</h3>
+<p>Edit your swanctl configuration file <code>/etc/swanctl/swanctl.conf</code> using the recommended VICI format:</p>
+<pre>
+connections {
+    rw {
+        version = 2
+        pools = rw-pool
+        local {
+            auth = pubkey
+            certs = 123.45.67.89.pem
+            id = 123.45.67.89
+        }
+        remote {
+            auth = pubkey
+        }
+        children {
+            rw-child {
+                local_ts = 0.0.0.0/0
+            }
+        }
+    }
+}
+pools {
+    rw-pool {
+        addrs = 10.3.0.0/16
+        dns = 1.1.1.1, 1.0.0.1
+    }
+}
+</pre>
+<p>Save the swanctl configuration.</p>
+
+<h3>6. Run strongSwan on server</h3>
+<p>Restart strongSwan:</p>
+<p><code>systemctl restart strongswan</code></p>
+<p><code>exit</code></p>
+
+<h2>Client</h2>
+<p>1. Securely copy the legacy-encrypted <code>.p12</code> file from your server to your Android device. Either transfer from server to PC then from PC to Android, or use Termius on the Android device.</p>
+
+<p>2. Import p12 file to Android client. This varies a bit from version of Android to version of Android. On Android 13 the option to import a user certificate is under 
+<strong>Settings</strong> &gt; <strong>Unlock and security</strong> &gt; <strong>More security settings</strong> &gt; <strong>Encryption and credentials</strong> &gt; <strong>Install a certificate</strong> &gt; <strong>VPN &amp; app user certificate</strong>.</p>
+
+<p>3. Install and configure strongSwan on Android client. From the Google Play store, install <strong>strongSwan VPN Client</strong> by <strong>strongSwan Project</strong>.
+
+<p>4. Add a VPN profile with IKEv2 certificate authentication. Select your imported <code>.p12</code> user certificate. If desired, select advanced settings (e.g. to block traffic that is not going to the VPN).
+Save your new VPN profile.</p>
+
+<p>5. Connect. On the screen with your VPN profile(s) on it, tap your desired row to connect the client to the server.</p>
+
+</body>
+</html>
