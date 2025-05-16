@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"> 
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>strongSwan server with Windows client</title>
+<style>
+html { color: #000; background-color: #2bb2dc; }
+body { max-width: 600px; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }
+pre, code { font-family: monospace, monospace; }
+img { display: block; margin: 0 auto; max-width: 100%; height: auto;}
+</style>
+</head>
+<body>
+<h1>strongSwan IKEv2 IPsec server with Windows user-password client authentication</h1>
+
+<h2>1. Enable forwarding in Linux kernel</h2>
+<p>Open Windows PowerShell.</p>
+<p>SSH into your server as root, e.g.:</p>
+<p><code>ssh root@123.123.123.123</code></p>
+<p>Edit the system control configuration file:</p>
+<p><code>vi /etc/sysctl.conf</code></p>
+<p>Uncomment the line to allow forwarding:</p>
+<p><code>net.ipv4.ip_forward=1</code></p>
+<p>Save the file.</p>
+<p>Activate the change:</p>
+<p><code>sysctl -p</code></p>
+
+<h2>2. Open firewall for IPsec</h2>
+<p>Add iptables rules to allow input on ports <code>udp/500</code> and <code>udp/4500</code>:</p>
+<p><code>iptables -A INPUT -p udp --dport 500 -j ACCEPT</code></p>
+<p><code>iptables -A INPUT -p udp --dport 4500 -j ACCEPT</code></p>
+<p>Masquerade the source address on outbound packets:</p>
+<p><code>iptables -t nat -A POSTROUTING -s 10.3.0.0/16 -o ens3 -j MASQUERADE</code></p>
+<p>Persist the new set of firewall rules (assuming you have previously installed <code>iptables-persistent</code>):</p>
+<p><code>dpkg-reconfigure iptables-persistent</code></p>
+
+<h2>3. Install packages</h2>
+<p>Update your system:</p>
+<p><code>apt update &amp;&amp; apt upgrade -y &amp;&amp; apt autoremove -y</code></p>
+<p>Install strongSwan and related packages:</p>
+<p><code>apt install -y strongswan strongswan-swanctl strongswan-pki libstrongswan libstrongswan-standard-plugins libstrongswan-extra-plugins libcharon-extra-plugins libcharon-extauth-plugins charon-systemd libtss2-tcti-tabrmd0</code></p>
+
+<h2>4. Generate CA key and certificate</h2>
+<p>Use the strongSwan pki tool to create CA key and certificate. Use key type RSA for compatibility with Windows (and other platforms):</p>
+<p><code>pki --gen --type rsa --outform pem &gt;/etc/swanctl/private/strongSwanKey.pem</code></p>
+<p><code>pki --self --ca --lifetime 3652 --in /etc/swanctl/private/strongSwanKey.pem --dn "C=CH, O=strongSwan, CN=strongSwan Root CA" --outform pem &gt; /etc/swanctl/x509ca/strongSwanCert.pem</code></p>
+<p>Convert the CA certificate to binary for subsequent download and import to Windows:
+<p><code>openssl x509 -in /etc/swanctl/x509ca/strongSwanCert.pem -out ~/strongSwanCert.cer -outform der</code></p>
+
+<h2>5. Generate server key and certificate</h2>
+<p>Create a directory for certificate requests:</p>
+<p><code>mkdir /etc/swanctl/req</code></p>
+<p>Create the server key and certificate, replacing 123.123.123.123 in the examples by your actual server IP address:</p>
+<p><code>pki --gen --type rsa --outform pem &gt; /etc/swanctl/private/123.123.123.123.pem</code></p>
+<p><code>pki --req --type rsa --in /etc/swanctl/private/123.123.123.123.pem --dn "C=CH, O=strongSwan, CN=123.123.123.123" --san 123.123.123.123 --outform pem &gt; /etc/swanctl/req/123.123.123.123.pem</code></p>
+<p>Issue the certificate with the flags required on the server certificate by Windows:</p>
+<p><code>pki --issue --cacert /etc/swanctl/x509ca/strongSwanCert.pem --cakey /etc/swanctl/private/strongSwanKey.pem --type pkcs10 --in /etc/swanctl/req/123.123.123.123.pem --lifetime 730 --flag serverAuth --flag ikeIntermediate --outform pem &gt; /etc/swanctl/x509/123.123.123.123.pem</code></p>
+
+<h2>6. Generate random user password</h2>
+<p><code>&lt; /dev/urandom tr -dc a-z0-9 | head -c${1:-16}; echo ''</code></p>
+<p>Example:</p>
+<p><code>pkv3yz1nnf956g29</code></p>
+
+<h2>7. Configure server</h2>
+<p>Edit the VICI-format configuration file:</p>
+<p><code>vi /etc/swanctl/swanctl.conf</code></p>
+<p>Delete the existing contents.</p>
+<p>Insert new contents, using this as a model:</p>
+<pre>
+    connections {
+        rw {
+            version = 2
+            pools = rw-pool-v4, rw-pool-v6
+            local {
+                auth = pubkey
+                certs = 123.123.123.123.pem
+                id = 123.123.123.123
+            }
+            send_cert = always
+            remote {
+                auth = eap-mschapv2
+                eap_id = %any
+            }
+            children {
+                rw-child {
+                    local_ts = 0.0.0.0/0,::/0
+                }
+            }
+        }
+    }
+    pools {
+        rw-pool-v4 {
+            addrs = 10.3.0.0/16
+            dns = 1.1.1.1, 1.0.0.1
+        }
+        rw-pool-v6 {
+            addrs = fec3::/120
+            dns = 2606:4700:4700::1111, 2606:4700:4700::1001
+       }
+    }
+    secrets {
+        eap-emily4 {
+            id = emily4
+            secret = pkv3yz1nnf956g29
+        }
+    }
+</pre>
+<p>Save the <code>swanctl</code> configuration file.</p>
+
+<h2>8. Run strongSwan on server</h2>
+<p>Stop and disable strongswan-starter:</p>
+<p><code>systemctl stop strongswan-starter</code></p>
+<p><code>systemctl disable strongswan-starter</code></p>
+<p>Restart strongSwan:</p>
+<p><code>systemctl restart strongswan</code></p>
+<p><code>systemctl status strongswan</code></p>
+<p><code>journalctl -u strongswan</code></p>
+<p><code>exit</code></p>
+
+<h2>9. Download CA certificate from server to Windows client</h2>
+<p>Note that CA certificates do not need to be kept secret. You can allow anyone to have them.</p>
+<p>Open Windows PowerShell.</p>
+<p>Issue the command:</p>
+<p><code>scp root@123.123.123.123:strongSwanCert.cer Downloads</code></p>
+
+<h2>10. Import the CA certificate to Windows</h2>
+<p>Make a note of your Windows user name from the prompt, e.g. <code>C:\Users\&lt;your-win-user-name&gt;</code>.</p>
+<p>Close Windows PowerShell as a regular user.</p>
+<p>Open Windows PowerShell with Run as Administrator.</p>
+<p>Issue the command:</p>
+<p><code>Import-Certificate -FilePath C:\Users\<your-win-user-name>\Downloads\strongSwanCert.cer -CertStoreLocation Cert:\LocalMachine\Root</code></p>
+
+<h2>11. Allow stronger encryption than Windows default</h2>
+<p>Still in Windows PowerShell opened with Run as Administrator, insert a new registry entry to allow stronger encryption than Windows allows by default:</p>
+<p><code>New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\RasMan\Parameters' -Name NegotiateDH2048_AES256 -PropertyType DWord -Value 1</code></p>
+<p>Close Windows PowerShell that was opened with Run as Administrator.</p>
+
+<h2>12. Add IKEv2 VPN connection</h2>
+<p>Open Windows PowerShell as a regular user.</p>
+<p>Issue the command:</p>
+<p><code>Add-VpnConnection -Name 'Emily VPN' -ServerAddress '123.123.123.123' -TunnelType IKEv2 -AuthenticationMethod Eap -EncryptionLevel Required -RememberCredential -PassThru</code></p>
+
+<h2>13. Configure IKEv2 parameters</h2>
+<p>Issue the command:</p>
+<p><code>Set-VpnConnectionIPsecConfiguration -Name 'Emily VPN' -AuthenticationTransformConstants GCMAES128 -CipherTransformConstants GCMAES128 -EncryptionMethod AES256 -IntegrityCheckMethod SHA256 -PfsGroup None -DHGroup Group14 -PassThru -Force</code></p>
+<p>Close Windows PowerShell.</p>
+
+<h2>14. Connect client to server</h2>
+<p>Open <strong>Settings</strong> &gt; <strong>Network &amp; internet</strong> &gt; <strong>VPN</strong>.</p>
+<p>Locate the row for <code>Emily VPN</code>.</p>
+<p>Press <strong>Connect</strong>.</p>
+<p>Type User name <code>emily4</code></p>
+<p>Type Password <code>pkv3yz1nnf956g29</code></p>
+<p>Click <strong>OK</strong>.</p>
+
+</body>
+</html>
