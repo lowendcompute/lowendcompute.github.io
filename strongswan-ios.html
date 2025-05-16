@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"> 
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>strongSwan server with iOS client</title>
+<style>
+html { color: #000; background-color: #2bb2dc; }
+body { max-width: 600px; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }
+pre, code { font-family: monospace, monospace; }
+img { display: block; margin: 0 auto; max-width: 100%; height: auto;}
+</style>
+</head>
+<body>
+<h1>strongSwan server with Let's Encrypt server certificate and iOS user-password client authentication</h1>
+
+<h2>1. Add DNS "A" record</h2>
+<p>Add a DNS "A" record pointing from <code>vpntest3.mydomain.mytld</code> to your server IP address.</p>
+<p>(Here as elsewhere in this tutorial, change <code>vpntest3.mydomain.mytld</code> and other values to your actual desired values.)</p>
+
+<h2>2. Allow forwarding in the Linux kernel</h2> 
+<p>SSH into server as <code>root</code>:</p>
+<pre>
+    ssh root@vpntest3.mydomain.mytld
+</pre>
+<p>Edit <code>/etc/sysctl.conf</code>:</p>
+<pre>
+    vi /etc/sysctl.conf
+</pre>
+<p>Uncomment the line:</p>
+<pre>
+    net.ipv4.ip_forward=1
+</pre>
+<p>Save the file. Activate the change:</p>
+<pre>
+    sysctl -p
+</pre>
+
+<h2>3. Add iptables rules</h2> 
+<p>Open port <code>tcp/80</code> to allow <code>certbot</code> to get in:</p>
+<pre>
+    iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+</pre>
+<p>Open ports <code>udp/500</code> and <code>udp/4500</code> for IPsec input:</p>
+<pre>
+    iptables -A INPUT -p udp --dport 500 -j ACCEPT
+
+    iptables -A INPUT -p udp --dport 4500 -j ACCEPT
+</pre>
+<p>Assuming your main interface is named <code>ens3</code>, masquerade the IP address of the output packets:</p>
+<pre>
+    iptables -t nat -A POSTROUTING -s 10.3.0.0/16 -o ens3 -j MASQUERADE
+</pre>
+<p>Assuming you have previously installed and configured <code>iptables-persistent</code>, persist the revised set of rules as they now stand:</p>
+<pre>
+    dpkg-reconfigure iptables-persistent
+</pre>
+
+<h2>4. Install strongSwan on server</h2> 
+<p>Install strongSwan:</p>
+<pre>
+    apt update && apt upgrade -y && apt autoremove -y
+
+    apt install -y strongswan strongswan-swanctl strongswan-pki \
+libstrongswan libstrongswan-standard-plugins libstrongswan-extra-plugins \
+libcharon-extra-plugins libcharon-extauth-plugins charon-systemd \
+libtss2-tcti-tabrmd0
+</pre>
+
+<h2>5. Obtain server certificate</h2> 
+<pre>
+    apt install -y snapd
+
+    snap install --classic certbot
+
+    ln -s /snap/bin/certbot /usr/bin/certbot
+
+    certbot certonly --standalone --agree-tos \
+--register-unsafely-without-email --key-type rsa --rsa-key-size 2048 \
+-d vpntest3.mydomain.mytld
+
+    certbot renew --dry-run
+</pre>
+
+<h2>6. Expand file permissions to allow strongSwan access</h2> 
+<pre>
+    cd /etc/letsencrypt
+
+    find . -type d -exec chmod 755 {} \;
+
+    find . -type f -exec chmod 644 {} \;
+
+    chmod 755 /etc/swanctl/private
+</pre>
+Edit <code>/etc/apparmor.d/usr.sbin.swanctl</code>:
+<pre>
+    vi /etc/apparmor.d/usr.sbin.swanctl
+</pre>
+Add a line after the <code>swanctl</code> line:
+<pre>
+    # All reading configuration, certificate, and key files beneath /etc/swanctl/
+    /etc/swanctl/**               r,
+    /etc/letsencrypt/**           r
+</pre>
+Save the file. Reload AppArmor:
+<pre>
+    systemctl reload apparmor
+</pre>
+
+<h2>7. Symlink to Let's Encrypt certificates</h2> 
+<pre>
+    ln -s /etc/letsencrypt/live/vpntest3.mydomain.mytld/privkey.pem /etc/swanctl/private/privkey.pem
+
+    ln -s /etc/letsencrypt/live/vpntest3.mydomain.mytld/chain.pem /etc/swanctl/x509ca/chain.pem
+
+    ln -s /etc/letsencrypt/live/vpntest3.mydomain.mytld/cert.pem /etc/swanctl/x509/cert.pem
+</pre>
+Create a script in <code>/etc/letsencrypt/renewal-hooks/post</code>:
+<pre>
+    vi /etc/letsencrypt/renewal-hooks/post/loadall.sh
+</pre>
+Add this script:
+<pre>
+    #!/bin/sh
+    /usr/sbin/swanctl --load-all
+</pre>
+<p>Save the script file.</p>
+
+<h2>8. Generate random user password</h2> 
+<pre>
+    &lt; /dev/urandom tr -dc a-z0-9 | head -c${1:-16}; echo ''
+</pre>
+Example:
+<pre>
+    wm77bw6inf77dz48
+</pre>
+
+<h2>9. Create strongSwan configuration</h2> 
+<p>Create your swanctl configuration file <code>/etc/swanctl/swanctl.conf</code> using the recommended VICI format:</p>
+<pre>
+    vi /etc/swanctl/swanctl.conf 
+</pre>
+<p>Replace the existing contents. Use this as a template:</p>
+<pre>
+    connections {
+        rw {
+            version = 2
+            pools = rw-pool-v4, rw-pool-v6
+            local {
+                auth = pubkey
+                certs = cert.pem
+                id = vpntest3.mydomain.mytld
+            }
+            send_cert = always
+            remote {
+                auth = eap-mschapv2
+                eap_id = %any
+            }
+            children {
+                rw-child {
+                    local_ts = 0.0.0.0/0,::/0
+                }
+            }
+        }
+    }
+    pools {
+        rw-pool-v4 {
+            addrs = 10.3.0.0/16
+            dns = 1.1.1.1, 1.0.0.1
+        }
+        rw-pool-v6 {
+            addrs = fec3::/120
+            dns = 2606:4700:4700::1111, 2606:4700:4700::1001
+       }
+    }
+    secrets {
+        eap-emily3 {
+            id = emily3
+            secret = wm77bw6inf77dz48
+        }
+    }
+</pre>
+<p>Save the <code>swanctl</code> configuration file.</p>
+
+<h2>10. Run strongSwan on server</h2> 
+<p>Stop and disable strongswan-starter:</p>
+<pre>
+    systemctl stop strongswan-starter
+
+    systemctl disable strongswan-starter
+</pre>
+<p>Restart strongSwan:</p>
+<pre>
+    systemctl restart strongswan
+
+    systemctl status strongswan
+
+    journalctl -u strongswan
+
+    exit
+</pre>
+
+<h2>11. Configure iOS client</h2> 
+<p>Open <strong>Settings</strong> &gt; <strong>General</strong> &gt; <strong>VPN &amp; Device Management</strong> &gt; <strong>VPN</strong>.</p>
+<p>Tap <strong>Add VPN Configuration</strong>.</p>
+<ul>
+<li>Type = IKEv2</li>
+<li>Description = <code>vpntest3.mydomain.mytld</code></li>
+<li>Server = <code>vpntest3.mydomain.mytld</code></li>
+<li>Remote ID = <code>vpntest3.mydomain.mytld</code></li>
+<li>Local ID = blank</li>
+<li>User authentication = Username</li>
+<li>Username = <code>emily3</code></li>
+<li>Password = <code>wm77bw6inf77dz48</code></li>
+</ul>
+<p>Tap <strong>Done</strong>.</p>
+<p>Connect.</p>
+
+</body>
+</html>
