@@ -1,0 +1,150 @@
+VLESS-TLS-XHTTP-H3
+==================
+
+Server
+======
+
+snap install --classic certbot
+
+ln -s /snap/bin/certbot /usr/bin/certbot
+
+certbot certonly --standalone --register-unsafely-without-email --agree-tos -d bughost.buzz
+
+certbot renew --dry-run
+
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --beta -u root
+
+vi /usr/local/etc/xray/config.json
+
+{
+    "inbounds": [
+        {
+            "sniffing": {
+                "enabled": true,
+                "destOverride": [
+                    "http",
+                    "tls",
+                    "quic"
+                ]
+            },
+            "port": 443,
+            "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {
+                "clients": [
+                    {
+                        "id": "c6ae1030-d01d-4686-92a0-8812ee514ccd" 
+                    }
+                ],
+                "decryption": "none"
+            },
+            "streamSettings": {
+                "network": "xhttp",
+                "security": "tls",
+                "xhttpSettings": {
+                    "path": "/splithttp",
+                    "host": "bughost.buzz" 
+                },
+                "tlsSettings": {
+                    "rejectUnknownSni": true,
+                    "minVersion": "1.3",
+                    "alpn": [
+                        "h3" 
+                    ],
+                    "certificates": [
+                        {
+                            "ocspStapling": 3600,
+                            "certificateFile": "/etc/letsencrypt/live/bughost.buzz/fullchain.pem", 
+                            "keyFile": "/etc/letsencrypt/live/bughost.buzz/privkey.pem" 
+
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "tag": "direct",
+            "protocol": "freedom"
+        }
+    ]
+}
+
+systemctl restart xray
+
+Client
+======
+
+COMMAND-LINE CLIENT XRAY
+
+ping bughost.buzz
+
+https://github.com/XTLS/Xray-core/releases
+
+Xray-windows-64.zip
+
+config.json
+
+{
+    "inbounds": [
+        {
+            "sniffing": {
+                "enabled": true,
+                "destOverride": [
+                    "http",
+                    "tls",
+                    "quic"
+                ]
+            },
+            "port": 10808,
+            "listen": "127.0.0.1",
+            "protocol": "socks",
+            "settings": {
+                "udp": true
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "vless",
+            "settings": {
+                "vnext": [
+                    {
+                        "address": "bughost.buzz", 
+                        "port": 443,
+                        "users": [
+                            {
+                                "id": "c6ae1030-d01d-4686-92a0-8812ee514ccd",
+                                "encryption": "none"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "streamSettings": {
+                "network": "xhttp",
+                "security": "tls",
+                "xhttpSettings": {
+                    "path": "/splithttp",
+                    "host": "bughost.buzz" 
+                },
+                "tlsSettings": {
+                    "allowInsecure": true,
+                    "serverName": "bughost.buzz",
+                    "alpn": [
+                        "h3"
+                    ]
+                }
+            }
+        }
+    ]
+}
+
+xray.exe -c config.json
+
+GUI CLIENT V2RAYN
+
+https://github.com/2dust/v2rayN/releases
+
+v2rayN-windows-64-SelfContained.zip
